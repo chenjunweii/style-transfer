@@ -2,7 +2,8 @@ import cv2
 import numpy as np
 
 
-mean = [123.68, 116.779, 103.939]
+#mean = [123.68, 116.779, 103.939]
+mean = [103.939, 116.779, 123.68]
 
 def preprocess(image, shape = None):
     

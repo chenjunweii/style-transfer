@@ -21,6 +21,8 @@ def correlation(style, noise, kwarg):
     """
     
     b, c, h, w = style.infer_shape(**kwarg)[1][0]
+    
+    #print '[{} {} {} {}]'.format(b, c, h, w)
 
     s = style.reshape((c, h * w))
 
@@ -32,4 +34,4 @@ def correlation(style, noise, kwarg):
     
     #print s.infer_shape(**kwarg)[1][0]
 
-    return mx.symbol.sum(data = (n - s) ** 2) / (4 * (c**2) * (h*w) ** 2)
+    return mx.symbol.sum(data = (n - s) ** 2)# / (4 * (c**2) * (h*w) ** 2)

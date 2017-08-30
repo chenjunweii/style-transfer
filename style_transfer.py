@@ -9,7 +9,7 @@ from model import *
 from loss import *
 from utils import *
 from pretrained import load_keras_pretrained
-
+import matplotlib.pyplot as plt
 parser = argparse.ArgumentParser(description='Process some integers.')
 
 parser.add_argument('--pretrained', dest = 'pretrained', default = '', type = str)
@@ -23,8 +23,8 @@ parser.add_argument('--content', dest = 'content', type = str)
 parser.add_argument('--style', dest = 'style', type = str)
 parser.add_argument('--noise', dest = 'noise', type = str)
 parser.add_argument('--output', dest = 'output', default = 'output', type = str)
-parser.add_argument('--sweight', dest = 'sweight', default = 5e2, type = float)
-parser.add_argument('--cweight', dest = 'cweight', default = 5, type = float)
+parser.add_argument('--sweight', dest = 'sweight', default = 1, type = float)
+parser.add_argument('--cweight', dest = 'cweight', default = 0.001, type = float)
 parser.add_argument('--chk', dest = 'checkpoint', default = 1000, type = int)
 
 
@@ -102,7 +102,9 @@ content_layer = ['conv4_2', 'conv5_2']
 
 style_layer = ['conv1_1', 'conv2_1', 'conv3_1', 'conv4_1', 'conv5_1']
 
-wL = 0.2
+wLs = 1 / float(len(style_layer))
+
+wLc = 1 / float(len(content_layer))
 
 batch_size = 1
 
@@ -198,13 +200,13 @@ if options.isTrain:
 
     """
 
-    content_loss = wL * sum(mse(content_node[c], noise_content_node[c]) for c in xrange(len(content_layer)))
+    content_loss = wLc * sum(mse(content_node[c], noise_content_node[c]) for c in xrange(len(content_layer)))
     
-    style_loss = sum(correlation(style_node[s], noise_style_node[s], style_shape_input) for s in xrange(len(style_layer)))
+    style_loss = wLs * sum(correlation(style_node[s], noise_style_node[s], style_shape_input) for s in xrange(len(style_layer)))
     
-    variation_loss = mx.symbol.mean(data = content - noise) / np.asscalar(np.prod(shape[:2]))
+    variation_loss = mx.symbol.mean(data = content - noise)# / np.asscalar(np.prod(shape[:2]))
     
-    loss = mx.symbol.MakeLoss(data = (options.cweight * content_loss + options.sweight * style_loss + variation_loss))
+    loss = mx.symbol.MakeLoss(data = (options.cweight * content_loss + options.sweight * style_loss))
     
     if options.pretrained:
         
@@ -244,11 +246,10 @@ if options.isTrain:
         
         optimizer(idx, exe.grad_dict['noise'], exe.arg_dict['noise'])
 
-        #print exe.arg_dict['wconv1_1'].asnumpy()[0,0]
         if i % options.checkpoint == 0 and i != 0:
             
             print 'Loss {}'.format(exe.outputs[0].asnumpy())
-                        
-            image = np.clip(unprocess(ndnoise.asnumpy()).astype(np.uint8), 0, 255)
             
+            image = np.clip(unprocess(ndnoise.asnumpy()), 0, 255).astype(np.uint8)
+
             cv2.imwrite('{}/{}.jpg'.format(options.output, i), image)
