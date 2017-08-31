@@ -17,14 +17,15 @@ parser.add_argument('--test', dest = 'test', default = '', type = str)
 parser.add_argument('--model', dest = 'model', default = '', type = str)
 parser.add_argument('--train', dest = 'isTrain', default = True, type = bool)
 parser.add_argument('--device', dest = 'device', default = 'cpu', type = str)
-parser.add_argument('--iters', dest = 'iterations', default = 5, type = int)
-parser.add_argument('--lr', dest = 'lr', default = 0.01, type = float)
+parser.add_argument('--iters', dest = 'iterations', default = 1000, type = int)
+parser.add_argument('--lr', dest = 'lr', default = 1e1, type = float)
 parser.add_argument('--content', dest = 'content', type = str)
 parser.add_argument('--style', dest = 'style', type = str)
 parser.add_argument('--noise', dest = 'noise', type = str)
 parser.add_argument('--output', dest = 'output', default = 'output', type = str)
-parser.add_argument('--sweight', dest = 'sweight', default = 1, type = float)
-parser.add_argument('--cweight', dest = 'cweight', default = 0.001, type = float)
+parser.add_argument('--sweight', dest = 'sweight', default = 5e2, type = float)
+parser.add_argument('--cweight', dest = 'cweight', default = 5e0, type = float)
+parser.add_argument('--vweight', dest = 'vweight', default = 1e2, type = float)
 parser.add_argument('--chk', dest = 'checkpoint', default = 1000, type = int)
 
 
@@ -56,6 +57,7 @@ if not os.path.isdir(options.output):
 
 device = mx.gpu() if options.device == 'gpu' else mx.cpu()
 
+
 """
 
 Create NDArray
@@ -66,11 +68,14 @@ npcontent = cv2.imread(options.content, True)
 
 shape = npcontent.shape
 
+npstyle = cv2.imread(options.style, True)
+
 ndcontent = mx.nd.array(preprocess(npcontent.astype(np.float32)), device)
 
-ndstyle = mx.nd.array(preprocess(cv2.imread(options.style, True).astype(np.float32), shape), device)
+ndstyle = mx.nd.array(preprocess(npstyle.astype(np.float32), shape), device)
 
-ndnoise = mx.nd.uniform(0, 1, npcontent.shape, device) if options.noise == None \
+
+ndnoise = mx.nd.array(preprocess(np.random.normal(127, 125, npcontent.shape)), device) if options.noise == None \
         else mx.nd.array(preprocess(cv2.imread(options.noise, True).astype(np.float32)), device)
 
 
@@ -203,20 +208,20 @@ if options.isTrain:
     content_loss = wLc * sum(mse(content_node[c], noise_content_node[c]) for c in xrange(len(content_layer)))
     
     style_loss = wLs * sum(correlation(style_node[s], noise_style_node[s], style_shape_input) for s in xrange(len(style_layer)))
+   
+    variation_loss = variation(noise)
     
-    variation_loss = mx.symbol.mean(data = content - noise)# / np.asscalar(np.prod(shape[:2]))
-    
-    loss = mx.symbol.MakeLoss(data = (options.cweight * content_loss + options.sweight * style_loss))
+    loss = mx.symbol.MakeLoss(data = options.cweight * content_loss + options.sweight * style_loss + options.vweight * variation_loss)
     
     if options.pretrained:
         
-        ndarg = load_keras_pretrained(options.pretrained, ndarg, device, 'vgg19')
+        ndarg, grad = load_keras_pretrained(options.pretrained, ndarg, device, 'vgg19')
     
     else:
 
         print 'Pretrained Models is not set properly'
 
-    grad = dict() 
+    #grad = dict() 
     
     ndarg['content'] = ndcontent
 
@@ -228,6 +233,9 @@ if options.isTrain:
     
     exe = loss.bind(device, args = ndarg, args_grad = grad)
 
+    #test = style_node_all['sconv1_1'].bind(device, args = ndarg)
+    test = style.bind(device, args = ndarg)
+    testc = content_node_all['cconv1_1'].bind(device, args = ndarg)
     idx = loss.list_arguments().index('noise')
 
     for i in xrange(options.iterations):
@@ -236,6 +244,8 @@ if options.isTrain:
 
         exe.backward()
         
+  #      test.forward(is_train = False)
+   #     testc.forward(is_train = False)
         """
         for idx, name in enumerate(loss.list_arguments()):
 
@@ -245,11 +255,18 @@ if options.isTrain:
         """
         
         optimizer(idx, exe.grad_dict['noise'], exe.arg_dict['noise'])
-
+        
         if i % options.checkpoint == 0 and i != 0:
-            
-            print 'Loss {}'.format(exe.outputs[0].asnumpy())
-            
+            print 'Step {}, Loss {}'.format(i, exe.outputs[0].asnumpy())
+            #test_image = np.clip(unprocess(test.outputs[0].asnumpy()[0, 0:3, :, :]), 0, 255).astype(np.uint8)
+       #     print 'ndstyle : ', ndstyle.shape
+      #      print 'npstyle : ', npstyle.shape
+     #       print 'ndcontent : ', ndcontent.shape
+    #        print 'npcontent : ', npcontent.shape
+        #    test_image = np.clip(unprocess(ndstyle.asnumpy()), 0, 255).astype(np.uint8)        
+         #   testc_image = np.clip(unprocess(testc.outputs[0].asnumpy()[0, 0:3, :, :]), 0, 255).astype(np.uint8)
             image = np.clip(unprocess(ndnoise.asnumpy()), 0, 255).astype(np.uint8)
 
             cv2.imwrite('{}/{}.jpg'.format(options.output, i), image)
+          #  cv2.imwrite('{}/test{}.jpg'.format(options.output, i), test_image)
+           # cv2.imwrite('{}/testc{}.jpg'.format(options.output, i), testc_image)

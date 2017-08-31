@@ -50,6 +50,8 @@ def load_keras_pretrained(pretrained, args, ctx, model):
     
     vgg = vgg19 if model == 'vgg19' else vgg16
 
+    grad = dict()
+
     with h5py.File(pretrained) as f:
 
         for k in vgg.keys():
@@ -58,11 +60,11 @@ def load_keras_pretrained(pretrained, args, ctx, model):
 
             args['b' + vgg[k]] = mx.nd.array(np.array(f[k]['param_1']), ctx)
             
-            #grad['w' + maps[k]] = mx.nd.zeros_like(data = args['w' + maps[k]])
+            grad['w' + vgg[k]] = mx.nd.zeros_like(data = args['w' + vgg[k]])
 
-            #grad['b' + maps[k]] = mx.nd.zeros_like(data = args['b' + maps[k]])
+            grad['b' + vgg[k]] = mx.nd.zeros_like(data = args['b' + vgg[k]])
 
-    return args
+    return args, grad
 
 def load_mat_pretrained(pretrained, args, ctx):
     
